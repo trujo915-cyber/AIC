@@ -68,11 +68,10 @@ Entra a **github.com** → "Sign up" → crea tu cuenta gratuita.
 2. Elige tu repositorio (`calificador-labo`), branch `main`, y como
    archivo principal: `app.py`.
 3. Antes de darle a "Deploy", abre **"Advanced settings"** → sección
-   **Secrets** → pega esto (reemplazando con tus valores reales):
+   **Secrets** → pega esto (reemplazando con tu valor real):
 
    ```toml
    GEMINI_API_KEY = "tu_api_key_real_copiada_en_el_paso_anterior"
-   APP_PASSWORD = "una_contraseña_que_tú_elijas"
    ```
 
 4. Clic en "Deploy". Espera 2-5 minutos mientras se instala todo.
@@ -92,8 +91,10 @@ actualiza sola en un par de minutos.
 
 1. Sube el Excel del paralelo → confirma qué prácticas y estudiantes detectó.
 2. Elige qué práctica vas a calificar, y si es coloquio o informe.
-3. Pega la rúbrica y sube 1+ ejemplo(s) ya calificados por ti (o carga un
-   perfil guardado de una vez anterior).
+3. Escribe texto libre y/o sube archivos de referencia (rúbrica en foto/PDF,
+   guía de la práctica, formato de ejemplo, en imagen/PDF/Word) + sube 1+
+   ejemplo(s) ya calificados por ti (o carga un perfil guardado de una vez
+   anterior).
 4. Sube las fotos/PDFs nuevos a calificar.
 5. Revisa la tabla: todo lo marcado en rojo/con alerta necesita que lo mires
    tú; lo demás puedes aprobarlo tal cual.

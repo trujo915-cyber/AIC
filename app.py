@@ -235,7 +235,21 @@ if hoja is not None:
                 ejemplos=ejemplos, material_archivos=material_archivos,
             )
             st.session_state.perfiles[perfil_id] = nuevo
-            st.success("Perfil guardado. Recuerda descargarlo en la barra lateral para no perderlo.")
+            st.session_state.perfil_recien_guardado = True
+
+    if st.session_state.get("perfil_recien_guardado"):
+        st.warning(
+            "⚠️ El perfil se guardó **solo en esta sesión** (en memoria). El archivo .json que "
+            "subiste al inicio NO se modifica solo -- para no perder este cambio, descarga el "
+            "archivo actualizado de perfiles ahora mismo y reemplaza el que tenías en OneDrive:"
+        )
+        st.download_button(
+            "⬇️ Descargar perfiles actualizados (con este cambio incluido)",
+            data=exportar_perfiles(st.session_state.perfiles),
+            file_name="perfiles_calificacion.json",
+            mime="application/json",
+            key="descarga_inmediata_perfil",
+        )
 
     # -----------------------------------------------------------------
     # Paso 4: documentos a calificar
@@ -360,7 +374,7 @@ if items:
         if tipo_rev == "coloquio":
             fila["Estudiante"] = it.estudiante_sugerido.nombre if it.estudiante_sugerido else SIN_ASIGNAR
         else:
-            grupo_ia = it.resultado_ia.grupo_detectado
+            grupo_ia = it.grupo_sugerido
             fila["Grupo"] = grupo_ia if grupo_ia in grupos_roster else SIN_ASIGNAR
         filas.append(fila)
 

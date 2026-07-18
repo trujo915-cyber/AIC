@@ -14,6 +14,7 @@ archivos guardados en ningún dispositivo en particular.
 from __future__ import annotations
 
 import io
+import zipfile
 
 import openpyxl
 import pandas as pd
@@ -66,6 +67,7 @@ for clave, valor in {
     "log_cambios": [],
     "resultado_aplicacion": None,
     "conflictos_pendientes": [],
+    "pdfs_calificados": [],
 }.items():
     if clave not in st.session_state:
         st.session_state[clave] = valor
@@ -161,6 +163,7 @@ if hoja is not None:
     practica = next(p for p in hoja.practicas if p.nombre == practica_nombre)
     perfil_id = f"{practica_nombre}|{tipo}"
     perfil_existente = st.session_state.perfiles.get(perfil_id)
+    materia_actual = perfil_existente.materia if perfil_existente else ""
 
     # -----------------------------------------------------------------
     # Paso 3: material de referencia + ejemplos
@@ -230,7 +233,7 @@ if hoja is not None:
             st.warning("Agrega al menos texto o un archivo de referencia antes de guardar.")
         else:
             nuevo = Perfil(
-                id=perfil_id, materia="", practica=practica_nombre, tipo=tipo,
+                id=perfil_id, materia=materia_actual, practica=practica_nombre, tipo=tipo,
                 rubrica_texto=rubrica_texto, puntaje_maximo=puntaje_maximo,
                 ejemplos=ejemplos, material_archivos=material_archivos,
             )
@@ -274,7 +277,9 @@ if hoja is not None:
                     items = procesar_lote(
                         tipo=tipo, hoja=hoja, practica=practica, documentos=documentos,
                         rubrica_texto=rubrica_texto, puntaje_maximo=puntaje_maximo,
-                        ejemplos=ejemplos, material_archivos=material_archivos, api_key=api_key,
+                        ejemplos=ejemplos, material_archivos=material_archivos,
+                        materia=materia_actual,
+                        api_key=api_key,
                     )
                     st.session_state.revision_items = items
                     st.session_state.revision_tipo = tipo
@@ -396,12 +401,25 @@ if items:
 
     df_editado = st.data_editor(df, column_config=column_config, use_container_width=True, hide_index=True)
 
+    if tipo_rev == "informe" and any(it.pdf_calificado for it in items):
+        with st.expander("📄 Descargar PDF calificado de cada informe (individualmente)"):
+            for it in items:
+                if it.pdf_calificado:
+                    st.download_button(
+                        f"⬇️ {it.archivo}",
+                        data=it.pdf_calificado,
+                        file_name=f"CALIFICADO_{it.archivo.rsplit('.', 1)[0]}.pdf",
+                        mime="application/pdf",
+                        key=f"pdf_individual_{it.archivo}",
+                    )
+
     if st.button("✅ Aplicar notas confirmadas al Excel", type="primary"):
         campo = "C" if tipo_rev == "coloquio" else "I"
         aplicados, sin_asignar = 0, 0
         nuevos_conflictos = []
+        pdfs_aplicados = []  # (nombre_archivo, bytes) -- solo informes, para el ZIP final
 
-        for _, fila in df_editado.iterrows():
+        for i_fila, fila in df_editado.iterrows():
             if not fila["Aprobar"]:
                 continue
 
@@ -416,11 +434,13 @@ if items:
                 destinatarios = [e for e in hoja.estudiantes if e.grupo == fila["Grupo"]]
 
             ws = st.session_state.wb[hoja.hoja]
+            fila_aplicada_ok = False
             for est in destinatarios:
                 valor_nuevo = float(fila["Nota sugerida"])
                 r = escribir_nota(ws, hoja, practica_rev, est, campo, valor_nuevo)
                 if r.ok:
                     aplicados += 1
+                    fila_aplicada_ok = True
                     st.session_state.log_cambios.append(f"{est.nombre} — {practica_rev.nombre} ({campo}) = {valor_nuevo}")
                 else:
                     nuevos_conflictos.append({
@@ -428,12 +448,19 @@ if items:
                         "valor_anterior": r.valor_anterior, "valor_nuevo": valor_nuevo, "celda": r.celda,
                     })
 
+            if tipo_rev == "informe" and fila_aplicada_ok:
+                pdf_bytes = items[i_fila].pdf_calificado
+                if pdf_bytes:
+                    nombre_pdf = f"CALIFICADO_{items[i_fila].archivo.rsplit('.', 1)[0]}.pdf"
+                    pdfs_aplicados.append((nombre_pdf, pdf_bytes))
+
         # Se guarda en session_state y se muestra en el bloque de ARRIBA en el
         # próximo render -- nunca justo antes de un st.rerun(), porque el
         # rerun borra cualquier st.success/st.warning antes de que se alcance
         # a ver (ese era el bug por el que "no aparecía ningún aviso").
         st.session_state.resultado_aplicacion = {"aplicados": aplicados, "sin_asignar": sin_asignar}
         st.session_state.conflictos_pendientes = st.session_state.conflictos_pendientes + nuevos_conflictos
+        st.session_state.pdfs_calificados = st.session_state.get("pdfs_calificados", []) + pdfs_aplicados
         st.session_state.revision_items = None
         st.rerun()
 
@@ -460,3 +487,16 @@ if st.session_state.wb is not None:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     st.caption("Sube este archivo a la carpeta correspondiente de OneDrive para reemplazar el anterior.")
+
+    if st.session_state.pdfs_calificados:
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for nombre, data in st.session_state.pdfs_calificados:
+                zf.writestr(nombre, data)
+        zip_buffer.seek(0)
+        st.download_button(
+            f"⬇️ Descargar {len(st.session_state.pdfs_calificados)} informe(s) calificado(s) (.zip)",
+            data=zip_buffer,
+            file_name="informes_calificados.zip",
+            mime="application/zip",
+        )
